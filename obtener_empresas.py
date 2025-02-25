@@ -2,7 +2,7 @@ import pandas as pd
 import yfinance as yf
 import requests
 from bs4 import BeautifulSoup
-from io import StringIO
+import os
 
 # Diccionario con los índices y sus fuentes
 indices = {
@@ -18,22 +18,23 @@ indices = {
     "Shanghai_Composite": "https://en.wikipedia.org/wiki/Shanghai_Composite_Index"
 }
 
-def obtener_tickers_wikipedia(url):
-    """Obtiene los tickers de empresas desde Wikipedia detectando automáticamente la tabla correcta."""
+def obtener_tickers_wikipedia(url, table_index=0):
+    """Obtiene los tickers de empresas desde Wikipedia."""
     try:
         response = requests.get(url)
         soup = BeautifulSoup(response.text, 'html.parser')
         tables = soup.find_all("table", {"class": "wikitable"})
+        
+        if not tables:
+            print(f"⚠️ No se encontraron tablas en {url}")
+            return []
 
-        for i, table in enumerate(tables):
-            df = pd.read_html(StringIO(str(table)))[0]  # Convertimos la tabla en DataFrame
-
-            for col in df.columns:
-                if any(keyword in col.lower() for keyword in ["ticker", "symbol", "code"]):
-                    tickers = df[col].dropna().astype(str).tolist()
-                    print(f"✅ Encontrada columna '{col}' en {url} (Tabla {i})")
-                    return tickers
-        print(f"⚠️ No se encontraron tickers en {url}")
+        df = pd.read_html(str(tables[table_index]))[0]
+        
+        for col in df.columns:
+            if "Ticker" in col or "Symbol" in col or "Code" in col:
+                print(f"✅ Encontrada columna '{col}' en {url} (Tabla {table_index})")
+                return df[col].dropna().tolist()
     except Exception as e:
         print(f"⚠️ Error obteniendo datos de {url}: {e}")
     return []
@@ -43,7 +44,7 @@ for nombre_indice, fuente in indices.items():
     print(f"🔍 Obteniendo empresas del {nombre_indice}...")
     try:
         tickers = obtener_tickers_wikipedia(fuente)
-
+        
         if not tickers:
             print(f"⚠️ No se encontraron datos para {nombre_indice}")
             continue
@@ -51,8 +52,12 @@ for nombre_indice, fuente in indices.items():
         df = pd.DataFrame(tickers, columns=["Ticker"])
         df.to_csv(f"{nombre_indice}.csv", index=False)
         print(f"✅ Datos de {nombre_indice} guardados en {nombre_indice}.csv")
-
     except Exception as e:
         print(f"❌ Error obteniendo datos para {nombre_indice}: {e}")
 
-print("🚀 Proceso completado: Se han guardado todas las listas de empresas de cada índice.")
+# Subir automáticamente a GitHub
+print("📤 Subiendo datos actualizados a GitHub...")
+os.system("git add .")
+os.system('git commit -m "Actualización automática de listas de empresas"')
+os.system("git push origin main")
+print("✅ Datos actualizados y subidos a GitHub.")
