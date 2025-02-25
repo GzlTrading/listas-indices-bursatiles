@@ -2,9 +2,11 @@ import pandas as pd
 import yfinance as yf
 import requests
 from bs4 import BeautifulSoup
+import os
+import subprocess
 
-# API Key para Financial Modeling Prep (sustituir con tu clave real)
-API_KEY = "2RXT7zlUtkfiUfqWhkQFSSZucY8Ct9Od"
+# Obtener API Key desde la variable de entorno
+API_KEY = os.getenv("FMP_API_KEY")
 
 # Diccionario con los índices y sus fuentes
 indices = {
@@ -22,6 +24,10 @@ indices = {
 
 def obtener_tickers_fmp(indice):
     """Obtiene la lista de empresas desde Financial Modeling Prep"""
+    if not API_KEY:
+        print("⚠️ Error: No se encontró una API Key configurada en la variable de entorno FMP_API_KEY")
+        return []
+    
     url = f"https://financialmodelingprep.com/api/v3/{indice}_constituent?apikey={API_KEY}"
     try:
         response = requests.get(url)
@@ -75,8 +81,10 @@ for nombre_indice, fuente in indices.items():
 
 # Subir archivos a GitHub automáticamente
 print("📤 Subiendo datos actualizados a GitHub...")
-import os
-os.system("git add .")
-os.system("git commit -m 'Actualización automática de listas de empresas'")
-os.system("git push origin main")
-print("✅ Datos actualizados y subidos a GitHub.")
+try:
+    subprocess.run(["git", "add", "*.csv"], check=True)
+    subprocess.run(["git", "commit", "-m", "Actualización automática de listas de empresas"], check=True)
+    subprocess.run(["git", "push", "origin", "main"], check=True)
+    print("✅ Datos actualizados y subidos a GitHub.")
+except subprocess.CalledProcessError as e:
+    print(f"⚠️ Error subiendo datos a GitHub: {e}")
