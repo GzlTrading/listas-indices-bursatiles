@@ -1,18 +1,13 @@
 import pandas as pd
 import yfinance as yf
-import requests
-from bs4 import BeautifulSoup
 import os
 import subprocess
 
-# Obtener API Key desde la variable de entorno
-API_KEY = os.getenv("FMP_API_KEY")
-
-# Diccionario con los índices y sus fuentes
+# Diccionario con los índices y sus símbolos en Yahoo Finance
 indices = {
-    "S&P_500": "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
-    "NASDAQ_100": "https://en.wikipedia.org/wiki/NASDAQ-100",
-    "Dow_Jones": "https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average",
+    "S&P_500": "^GSPC",
+    "NASDAQ_100": "^NDX",
+    "Dow_Jones": "^DJI",
     "DAX": "^GDAXI",
     "IBEX_35": "^IBEX",
     "CAC_40": "^FCHI",
@@ -22,69 +17,40 @@ indices = {
     "Shanghai_Composite": "000001.SS"
 }
 
-def obtener_tickers_fmp(indice):
-    """Obtiene la lista de empresas desde Financial Modeling Prep"""
-    if not API_KEY:
-        print("⚠️ Error: No se encontró una API Key configurada en la variable de entorno FMP_API_KEY")
-        return []
-    
-    url = f"https://financialmodelingprep.com/api/v3/{indice}_constituent?apikey={API_KEY}"
+def obtener_tickers_yfinance(indice):
+    """Obtiene los componentes de un índice desde Yahoo Finance."""
     try:
-        response = requests.get(url)
-        data = response.json()
-        return [empresa["symbol"] for empresa in data]
+        tickers = yf.Ticker(indice).history(period="1d").columns.tolist()
+        return tickers if tickers else []
     except Exception as e:
-        print(f"⚠️ Error obteniendo datos de FMP para {indice}: {e}")
+        print(f"⚠️ Error obteniendo datos de Yahoo Finance para {indice}: {e}")
         return []
-
-def obtener_tickers_wikipedia(url, table_index=0):
-    """Obtiene los tickers de empresas desde Wikipedia."""
-    try:
-        response = requests.get(url)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        tables = soup.find_all("table", {"class": "wikitable"})
-        df = pd.read_html(str(tables[table_index]))[0]
-        
-        for col in df.columns:
-            if "Ticker" in col or "Symbol" in col:
-                return df[col].dropna().tolist()
-    except Exception as e:
-        print(f"⚠️ Error obteniendo datos de {url}: {e}")
-    return []
 
 # Obtener y guardar los componentes de cada índice
-for nombre_indice, fuente in indices.items():
-    print(f"🔍 Obteniendo empresas del {nombre_indice}...")
-    tickers = []
-    
-    # Intentar obtener datos de FMP primero
-    tickers = obtener_tickers_fmp(nombre_indice.lower())
-    
-    # Si FMP no devuelve datos, intentar con Wikipedia
-    if not tickers and "wikipedia.org" in fuente:
-        tickers = obtener_tickers_wikipedia(fuente)
-    
-    # Si FMP y Wikipedia fallan, intentar con Yahoo Finance
-    if not tickers and not "wikipedia.org" in fuente:
-        try:
-            tickers = list(yf.Ticker(fuente).history(period="1d").columns)
-        except Exception as e:
-            print(f"⚠️ No se pudieron obtener datos desde Yahoo Finance para {nombre_indice}: {e}")
-    
-    if not tickers:
-        print(f"⚠️ No se encontraron datos para {nombre_indice}")
-        continue
+def actualizar_indices():
+    for nombre_indice, simbolo in indices.items():
+        print(f"🔍 Obteniendo empresas del {nombre_indice}...")
+        tickers = obtener_tickers_yfinance(simbolo)
+        
+        if not tickers:
+            print(f"⚠️ No se encontraron datos para {nombre_indice}")
+            continue
 
-    df = pd.DataFrame(tickers, columns=["Ticker"])
-    df.to_csv(f"{nombre_indice}.csv", index=False)
-    print(f"✅ Datos de {nombre_indice} guardados en {nombre_indice}.csv")
+        df = pd.DataFrame(tickers, columns=["Ticker"])
+        df.to_csv(f"{nombre_indice}.csv", index=False)
+        print(f"✅ Datos de {nombre_indice} guardados en {nombre_indice}.csv")
 
-# Subir archivos a GitHub automáticamente
-print("📤 Subiendo datos actualizados a GitHub...")
-try:
-    subprocess.run(["git", "add", "*.csv"], check=True)
-    subprocess.run(["git", "commit", "-m", "Actualización automática de listas de empresas"], check=True)
-    subprocess.run(["git", "push", "origin", "main"], check=True)
-    print("✅ Datos actualizados y subidos a GitHub.")
-except subprocess.CalledProcessError as e:
-    print(f"⚠️ Error subiendo datos a GitHub: {e}")
+def subir_a_github():
+    """Sube los archivos actualizados a GitHub automáticamente."""
+    print("📤 Subiendo datos actualizados a GitHub...")
+    try:
+        subprocess.run(["git", "add", "*.csv"], check=True)
+        subprocess.run(["git", "commit", "-m", "Actualización automática de listas de empresas"], check=True)
+        subprocess.run(["git", "push", "origin", "main"], check=True)
+        print("✅ Datos actualizados y subidos a GitHub.")
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️ Error subiendo datos a GitHub: {e}")
+
+if __name__ == "__main__":
+    actualizar_indices()
+    subir_a_github()
